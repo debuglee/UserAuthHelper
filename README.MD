@@ -28,7 +28,7 @@ r.Handle("/protected-endpoint", auth_module.AuthMiddleware(http.HandlerFunc(Some
 package main
 
 import (
-    "UserAuthHelper/auth_module"
+    "github.com/debuglee/UserAuthHelper/auth_module"
     "net/http"
 
 "github.com/gorilla/mux"
