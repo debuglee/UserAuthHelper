@@ -29,11 +29,10 @@ func main() {
 	// Import the AuthMiddleware from auth_module
 	r.Handle("/protected-endpoint", auth_module.AuthMiddleware(http.HandlerFunc(SomeHandler)))
 
-	http.ListenAndServe(":8080", r)
+	http.ListenAndServe(":8899", r)
 }
 
 func SomeHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("You have accessed a protected endpoint!"))
 }
-go get github.com/debuglee/UserAuthHelper/auth_module
