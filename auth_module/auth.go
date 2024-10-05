@@ -33,7 +33,7 @@ type Response struct {
 func Login(w http.ResponseWriter, r *http.Request, db *gorm.DB) {
 	var request LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		response := Response{Code: http.StatusBadRequest, Message: "Invalid request", Data: nil}
+		response := Response{Code: http.StatusUnauthorized, Message: "Invalid request", Data: nil}
 		json.NewEncoder(w).Encode(response)
 		return
 	}
