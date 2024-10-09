@@ -1,40 +1,44 @@
 package auth_module
 
 import (
+	"net/http"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
 )
 
-var jwtKey = []byte("my_secret_key") // 这应该存储在配置文件中
+// 从环境变量中读取 JWT 密钥
+var jwtKey = []byte(os.Getenv("JWT_SECRET"))
+
+// 从环境变量中读取 Refresh Token 密钥
+var refreshSecretKey = []byte(os.Getenv("REFRESH_SECRET"))
 
 type Claims struct {
+	UserID   uint   `json:"user_id"`
 	Username string `json:"username"`
-	jwt.StandardClaims
+	jwt.RegisteredClaims
+}
+
+type RefreshClaims struct {
+	UserID   uint   `json:"user_id"`
+	Username string `json:"username"`
+	jwt.RegisteredClaims
 }
 
 // 生成JWT
-func GenerateJWT(username string) (string, error) {
-	expirationTime := time.Now().Add(1 * time.Hour) // 设置JWT的过期时间为1小时
+func GenerateJWT(userID uint, username string) (string, error) {
+	expirationTime := time.Now().Add(1 * time.Hour) // 设置有效期为1小时
 	claims := &Claims{
+		UserID:   userID,
 		Username: username,
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: expirationTime.Unix(),
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()), // 添加签发时间
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(jwtKey)
-	if err != nil {
-		return "", err
-	}
-
-	// 将 token 添加到白名单
-	err = AddTokenToWhitelist(tokenString, expirationTime)
-	if err != nil {
-		return "", err
-	}
-
-	return tokenString, nil
+	return token.SignedString(jwtKey)
 }
 
 // 验证JWT
@@ -48,10 +52,50 @@ func ValidateJWT(tokenString string) (*Claims, error) {
 		return nil, err
 	}
 
-	// 检查 token 是否在白名单中并且未过期
-	if !IsTokenInWhitelist(tokenString) {
-		return nil, jwt.NewValidationError("token is not whitelisted", jwt.ValidationErrorClaimsInvalid)
+	return claims, nil
+}
+
+// 生成 Refresh Token
+func GenerateRefreshToken(userID uint, username string) (string, error) {
+	expirationTime := time.Now().Add(30 * 24 * time.Hour) // 设置 Refresh Token 有效期为30天
+	claims := &RefreshClaims{
+		UserID:   userID,
+		Username: username,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()), // 添加签发时间
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(refreshSecretKey)
+}
+
+// 验证 Refresh Token
+func ValidateRefreshToken(tokenString string) (*RefreshClaims, error) {
+	claims := &RefreshClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		return refreshSecretKey, nil
+	})
+
+	if err != nil || !token.Valid {
+		return nil, err
 	}
 
 	return claims, nil
+}
+
+// 获取用户ID从JWT中
+func GetUserIDFromToken(r *http.Request) (uint, error) {
+	tokenString := r.Header.Get("Authorization")
+
+	if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
+		tokenString = tokenString[7:]
+	}
+
+	claims, err := ValidateJWT(tokenString)
+	if err != nil {
+		return 0, err
+	}
+
+	return claims.UserID, nil
 }
